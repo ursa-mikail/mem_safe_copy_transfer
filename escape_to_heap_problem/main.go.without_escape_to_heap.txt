@@ -1,0 +1,99 @@
+package main
+
+import (
+	"crypto/rand"
+	"fmt"
+	"log"
+	"syscall"
+)
+
+func main() {
+	fmt.Println("=== Simple mlock Memory Demo ===")
+
+	const size = 16
+
+	// Allocate memory using mmap
+	data1, err := syscall.Mmap(-1, 0, size,
+		syscall.PROT_READ|syscall.PROT_WRITE,
+		syscall.MAP_ANON|syscall.MAP_PRIVATE)
+	if err != nil {
+		log.Fatal("Mmap failed:", err)
+	}
+	defer syscall.Munmap(data1)
+
+	data2, err := syscall.Mmap(-1, 0, size,
+		syscall.PROT_READ|syscall.PROT_WRITE,
+		syscall.MAP_ANON|syscall.MAP_PRIVATE)
+	if err != nil {
+		log.Fatal("Mmap failed:", err)
+	}
+	defer syscall.Munmap(data2)
+
+	// Lock the memory
+	if err := syscall.Mlock(data1); err != nil {
+		fmt.Printf("Warning: mlock failed for data1: %v (try running as root)\n", err)
+	}
+	defer syscall.Munlock(data1)
+
+	if err := syscall.Mlock(data2); err != nil {
+		fmt.Printf("Warning: mlock failed for data2: %v (try running as root)\n", err)
+	}
+	defer syscall.Munlock(data2)
+
+	// Step 1: Write random data to first region
+	fmt.Println("\n1. Writing 16 bytes random to first memory region:")
+	rand.Read(data1)
+	fmt.Printf("Data: ")
+	for _, b := range data1 {
+		fmt.Printf("%02x ", b)
+	}
+	fmt.Printf("\nAddress: %p\n", &data1[0])
+
+	// Step 2: Transfer to second region
+	fmt.Println("\n2. Transferring to second memory region:")
+	copy(data2, data1)
+	fmt.Printf("Data: ")
+	for _, b := range data2 {
+		fmt.Printf("%02x ", b)
+	}
+	fmt.Printf("\nAddress: %p\n", &data2[0])
+
+	// Step 3: Random fill both and display
+	fmt.Println("\n3. Randomly filling both regions:")
+	rand.Read(data1)
+	rand.Read(data2)
+
+	fmt.Printf("Region 1: ")
+	for _, b := range data1 {
+		fmt.Printf("%02x ", b)
+	}
+	fmt.Printf("\nAddress: %p\n", &data1[0])
+
+	fmt.Printf("Region 2: ")
+	for _, b := range data2 {
+		fmt.Printf("%02x ", b)
+	}
+	fmt.Printf("\nAddress: %p\n", &data2[0])
+
+	fmt.Println("\n=== Demo Complete ===")
+}
+
+/*
+=== Simple mlock Memory Demo ===
+
+1. Writing 16 bytes random to first memory region:
+Data: 7f ea b7 e6 c8 52 8c f2 91 5f 2c 80 ad 5d e5 5c 
+Address: 0x7fd95ccc4000
+
+2. Transferring to second memory region:
+Data: 7f ea b7 e6 c8 52 8c f2 91 5f 2c 80 ad 5d e5 5c 
+Address: 0x7fd95ccc3000
+
+3. Randomly filling both regions:
+Region 1: 95 9c 4a 0b 87 f2 68 ca d7 11 92 3b fb 98 87 00 
+Address: 0x7fd95ccc4000
+Region 2: a8 f9 08 1d 69 fd 6a 25 b4 49 d8 43 37 dd ab 0a 
+Address: 0x7fd95ccc3000
+
+=== Demo Complete ===
+*/
